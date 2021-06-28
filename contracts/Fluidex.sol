@@ -20,13 +20,4 @@ contract FluidexDemo {
    function get_block_state_by_block_id(uint256 block_id) public returns (BlockState) {
       return block_states[block_id];
    }
-
-   function submit_block(
-      uint256 block_id,
-      uint256[] memory public_inputs,
-      uint256[] memory serialized_proof) public returns (bool) {
-      require(public_inputs.length >= 2);
-
-      return true;
-   }
 }
