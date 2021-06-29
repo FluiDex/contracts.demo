@@ -19,11 +19,11 @@ contract FluidexDemo {
       GENESIS_ROOT = _genesis_root;
    }
 
-   function get_block_state_by_block_id(uint256 _block_id) public returns (BlockState) {
+   function getBlockStateByBlockId(uint256 _block_id) public returns (BlockState) {
       return block_states[_block_id];
    }
 
-   function submit_block(
+   function submitBlock(
       uint256 _block_id,
       uint256[] memory _public_inputs,
       uint256[] memory _serialized_proof
