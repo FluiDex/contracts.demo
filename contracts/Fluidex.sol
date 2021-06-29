@@ -4,7 +4,7 @@ pragma solidity >=0.6.0 <0.8.0;
 
 import "./PlonkCore.sol";
 
-contract FluidexDemo {
+contract FluidexDemo is PlonkCore {
    enum BlockState {
       Empty,
       Submitted,
