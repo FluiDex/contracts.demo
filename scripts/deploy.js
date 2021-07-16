@@ -3,9 +3,12 @@
 //
 // When running the script with `hardhat run <script>` you'll find the Hardhat
 // Runtime Environment's members available in the global scope.
+const Dotenv = require("dotenv");
 const hre = require("hardhat");
 
 async function main() {
+  Dotenv.config();
+
   // Hardhat always runs the compile task when running scripts with its command
   // line interface.
   //
