@@ -1,26 +1,124 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.8.0;
 
+import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "hardhat/console.sol"; // for debugging
-import "./verifier.sol";
 
-contract FluidexDemo is KeyedVerifier {
+import "./Events.sol";
+import "./Verifier.sol";
+
+/**
+ * @title FluidexDemo
+ */
+contract FluidexDemo is Events, KeyedVerifier, ReentrancyGuard {
+   using SafeERC20 for IERC20;
+
    enum BlockState {
       Empty,
       Submitted,
       Verified
    }
 
+   struct UserInfo {
+      address ethAddr;
+      bytes32 bjjPubkey;
+   }
+
+   /// hard limit for ERC20 tokens
+   uint16 constant TOKEN_NUM_LIMIT = 65535;
+   /// hard limit for users
+   uint16 constant USER_NUM_LIMIT = 65535;
+   /// use 0 representing ETH in tokenId
+   uint16 constant ETH_ID = 0;
+
    uint256 GENESIS_ROOT;
    mapping(uint256 => uint256) public state_roots;   
    mapping(uint256 => BlockState) public block_states;
 
-   constructor(uint256 _genesis_root) public {
+   uint16 public tokenNum;
+   mapping(uint16 => address) public tokenIdToAddr;
+   mapping(address => uint16) public tokenAddrToId;
+
+   uint16 public userNum;
+   mapping(uint16 => UserInfo) public userIdToUserInfo;
+   mapping(bytes32 => uint16) public userBjjPubkeyToUserId;
+
+   constructor(uint256 _genesis_root) {
       GENESIS_ROOT = _genesis_root;
    }
 
-   function getBlockStateByBlockId(uint256 _block_id) public returns (BlockState) {
+   /**
+    * @notice request to add a new ERC20 token
+    * @param tokenAddr the ERC20 token address
+    * @return the new ERC20 token tokenId
+    */
+   function addToken(address tokenAddr)
+      external
+      nonReentrant
+      returns (uint16)
+   {
+      require(tokenAddrToId[tokenAddr] == 0, "token existed");
+      tokenNum++;
+      require(tokenNum < TOKEN_NUM_LIMIT, "token num limit reached");
+
+      uint16 tokenId = tokenNum;
+      tokenIdToAddr[tokenId] = tokenAddr;
+      tokenAddrToId[tokenAddr] = tokenId;
+      
+      emit NewToken(msg.sender, tokenAddr, tokenId);
+      return tokenId;
+   }
+
+   /**
+    * @param to the L2 address (bjjPubkey) of the deposit target.
+    */
+   function depositETH(
+      bytes32 to
+   ) external payable orCreateUser(to) {
+      emit Deposit(ETH_ID, to, msg.value);
+   }
+
+   /**
+    * @param to the L2 address (bjjPubkey) of the deposit target.
+    * @param amount the deposit amount.
+    */
+   function depositERC20(
+      IERC20 token,
+      bytes32 to,
+      uint128 amount
+   ) external nonReentrant tokenExist(token) orCreateUser(to) {
+      uint16 tokenId = tokenAddrToId[address(token)];
+
+      uint256 balanceBeforeDeposit = token.balanceOf(address(this));
+      token.safeTransferFrom(msg.sender, address(this), amount);
+      uint256 balanceAfterDeposit = token.balanceOf(address(this));
+      uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
+      emit Deposit(tokenId, to, realAmount);
+   }
+
+   /**
+    * @dev this won't verify the pubkey
+    * @param ethAddr the L1 address
+    * @param bjjPubkey the L2 address (bjjPubkey)
+    */
+   function registerUser(address ethAddr, bytes32 bjjPubkey) internal {
+      require(userBjjPubkeyToUserId[bjjPubkey] == 0, "user existed");
+      userNum++;
+      require(userNum < USER_NUM_LIMIT, "user num limit reached");
+
+      uint16 userId = userNum;
+      userIdToUserInfo[userId] = UserInfo({
+         ethAddr: ethAddr,
+         bjjPubkey: bjjPubkey
+      });
+      userBjjPubkeyToUserId[bjjPubkey] = userId;
+      emit RegisterUser(ethAddr, userId, bjjPubkey);
+   }
+
+   function getBlockStateByBlockId(uint256 _block_id) public view returns (BlockState) {
       return block_states[_block_id];
    }
 
@@ -52,5 +150,25 @@ contract FluidexDemo is KeyedVerifier {
       state_roots[_block_id] = _public_inputs[1];
 
       return true;
+   }
+
+   /**
+    * @dev require a token is registered
+    * @param token the ERC20 token address
+    */
+   modifier tokenExist(IERC20 token) {
+      require(tokenAddrToId[address(token)] != 0, "non exist token");
+      _;
+   }
+
+   /**
+    * @dev create a user if not exist
+    * @param bjjPubkey the L2 address (bjjPubkey)
+    */
+   modifier orCreateUser(bytes32 bjjPubkey) {
+      if (userBjjPubkeyToUserId[bjjPubkey] == 0) {
+         registerUser(msg.sender, bjjPubkey);
+      }
+      _;
    }
 }
