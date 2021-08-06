@@ -1,5 +1,6 @@
 {
   "name": "fluidex-demo-contracts",
+  "license": "MIT OR Apache-2.0",
   "scripts": {
     "fmt": "prettier --write 'contracts/**/*.sol' 'test/**/*.js'"
   },
@@ -14,6 +15,6 @@
     "prettier-plugin-solidity": "^1.0.0-beta.2"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^3.3.0"
+    "@openzeppelin/contracts": "^4.2.0"
   }
 }
