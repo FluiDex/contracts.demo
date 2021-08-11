@@ -1,6 +1,6 @@
 # contracts.demo
 
-Contracts for Fluidex demo, using hardhat local node for now.
+Contracts for FluiDex demo, using hardhat local node for now.
 
 ```
 yarn install
