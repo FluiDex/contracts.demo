@@ -14,13 +14,13 @@ async function main() {
   // await hre.run('compile');
 
   // We get the contract to deploy
-  const fluidexFactory = await ethers.getContractFactory("FluidexDemo");
+  const fluidexFactory = await ethers.getContractFactory("FluiDexDemo");
   let genesisRoot = process.env.GENESIS_ROOT;
   console.log("genesisRoot:", genesisRoot);
   fluidex = await fluidexFactory.deploy(genesisRoot);
   await fluidex.deployed();
   // await fluidex.initialize();
-  console.log("Fluidex deployed to:", fluidex.address);
+  console.log("FluiDex deployed to:", fluidex.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

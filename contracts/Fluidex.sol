@@ -11,9 +11,9 @@ import "./Events.sol";
 import "./Verifier.sol";
 
 /**
- * @title FluidexDemo
+ * @title FluiDexDemo
  */
-contract FluidexDemo is Events, KeyedVerifier, ReentrancyGuard {
+contract FluiDexDemo is Events, KeyedVerifier, ReentrancyGuard {
    using SafeERC20 for IERC20;
 
    enum BlockState {
