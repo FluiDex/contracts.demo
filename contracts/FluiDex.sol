@@ -2,8 +2,10 @@
 
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "hardhat/console.sol"; // for debugging
 
@@ -13,8 +15,10 @@ import "./Verifier.sol";
 /**
  * @title FluiDexDemo
  */
-contract FluiDexDemo is Events, KeyedVerifier, ReentrancyGuard {
+contract FluiDexDemo is AccessControl, Events, KeyedVerifier, Ownable, ReentrancyGuard {
    using SafeERC20 for IERC20;
+
+   bytes32 public constant TOKEN_ADMIN_ROLE = keccak256("TOKEN_ADMIN_ROLE");
 
    enum BlockState {
       Empty,
@@ -48,6 +52,9 @@ contract FluiDexDemo is Events, KeyedVerifier, ReentrancyGuard {
 
    constructor(uint256 _genesis_root) {
       GENESIS_ROOT = _genesis_root;
+      _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+      _setRoleAdmin(TOKEN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+      grantRole(TOKEN_ADMIN_ROLE, msg.sender);
    }
 
    /**
@@ -58,6 +65,7 @@ contract FluiDexDemo is Events, KeyedVerifier, ReentrancyGuard {
    function addToken(address tokenAddr)
       external
       nonReentrant
+      onlyRole(TOKEN_ADMIN_ROLE)
       returns (uint16)
    {
       require(tokenAddrToId[tokenAddr] == 0, "token existed");
