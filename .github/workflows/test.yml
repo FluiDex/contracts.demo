@@ -39,6 +39,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-yarn-
 
+      - name: Cache node_modules
+        id: npm_cache
+        uses: actions/cache@v2
+        with:
+          path: node_modules
+          key: node_modules-${{ hashFiles('yarn.lock') }}
+
+      - name: yarn install
+        if: steps.npm_cache.outputs.cache-hit != 'true'
+        run: yarn install
+
       - name: Verify via smart contract
         run: |
           yarn install
