@@ -52,5 +52,4 @@ jobs:
 
       - name: Verify via smart contract
         run: |
-          yarn install
           npx hardhat test
