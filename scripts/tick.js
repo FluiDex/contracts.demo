@@ -13,7 +13,7 @@ async function main() {
 
   while (true) {
       try {
-        await sleep(1000);
+        await sleep(15000);
         console.log("tick tock", await ticker.tick());
       } catch (e) {
         console.log("error", e);
