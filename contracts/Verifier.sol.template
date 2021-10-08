@@ -956,7 +956,7 @@ contract KeyedVerifier is IVerifier, Plonk4VerifierWithAccessToDNext {
     function verify_serialized_proof(
         uint256[] memory public_inputs, 
         uint256[] memory serialized_proof
-    ) public view returns (bool) {
+    ) override external view returns (bool) {
         VerificationKey memory vk = get_verification_key();
         require(vk.num_inputs == public_inputs.length);
 
