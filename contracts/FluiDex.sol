@@ -10,12 +10,12 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "hardhat/console.sol"; // for debugging
 
 import "./Events.sol";
-import "./Verifier.sol";
+import "./IVerifier.sol";
 
 /**
  * @title FluiDexDemo
  */
-contract FluiDexDemo is AccessControl, Events, KeyedVerifier, Ownable, ReentrancyGuard {
+contract FluiDexDemo is AccessControl, Events, Ownable, ReentrancyGuard {
    using SafeERC20 for IERC20;
 
    bytes32 public constant TOKEN_ADMIN_ROLE = keccak256("TOKEN_ADMIN_ROLE");
@@ -38,6 +38,8 @@ contract FluiDexDemo is AccessControl, Events, KeyedVerifier, Ownable, Reentranc
    /// use 0 representing ETH in tokenId
    uint16 constant ETH_ID = 0;
 
+   IVerifier verifier;
+
    uint256 GENESIS_ROOT;
    mapping(uint256 => uint256) public state_roots;   
    mapping(uint256 => BlockState) public block_states;
@@ -50,8 +52,9 @@ contract FluiDexDemo is AccessControl, Events, KeyedVerifier, Ownable, Reentranc
    mapping(uint16 => UserInfo) public userIdToUserInfo;
    mapping(bytes32 => uint16) public userBjjPubkeyToUserId;
 
-   constructor(uint256 _genesis_root) {
+   constructor(uint256 _genesis_root, IVerifier _verifier) {
       GENESIS_ROOT = _genesis_root;
+      verifier = _verifier;
       _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
       _setRoleAdmin(TOKEN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
       grantRole(TOKEN_ADMIN_ROLE, msg.sender);
@@ -146,7 +149,7 @@ contract FluiDexDemo is AccessControl, Events, KeyedVerifier, Ownable, Reentranc
 
       if (_serialized_proof.length != 0) {
          // TODO: hash inputs and then pass into verifier
-         assert(verify_serialized_proof(_public_inputs, _serialized_proof));
+         assert(verifier.verify_serialized_proof(_public_inputs, _serialized_proof));
          if (_block_id > 0) {
             assert(block_states[_block_id-1] == BlockState.Verified);
          }
