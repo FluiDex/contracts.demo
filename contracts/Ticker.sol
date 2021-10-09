@@ -3,7 +3,6 @@
 pragma solidity ^0.8.0;
 
 contract Ticker {
-
     uint256 ticktock;
 
     constructor() {
