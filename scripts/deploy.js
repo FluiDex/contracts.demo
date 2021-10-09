@@ -14,10 +14,15 @@ async function main() {
   // await hre.run('compile');
 
   // We get the contract to deploy
+  const verifierFactory = await ethers.getContractFactory("KeyedVerifier");
+  verifier = await verifierFactory.deploy();
+  await verifier.deployed();
+  console.log("Verifier deployed to:", verifier.address);
+
   const fluidexFactory = await ethers.getContractFactory("FluiDexDemo");
   let genesisRoot = process.env.GENESIS_ROOT;
   console.log("genesisRoot:", genesisRoot);
-  fluidex = await fluidexFactory.deploy(genesisRoot);
+  fluidex = await fluidexFactory.deploy(genesisRoot, verifier.address);
   await fluidex.deployed();
   // await fluidex.initialize();
   console.log("FluiDex deployed to:", fluidex.address);
