@@ -7,11 +7,16 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.
 import "./IFluiDex.sol";
 
 contract FluiDexDelegate is AccessControl, IFluiDex, ReentrancyGuard {
+
+    bytes32 public constant TOKEN_ADMIN_ROLE = keccak256("TOKEN_ADMIN_ROLE");
+
     IFluiDex target;
     event TargetChange(IFluiDex prev, IFluiDex now);
 
     constructor(IFluiDex _target) {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setRoleAdmin(TOKEN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+        grantRole(TOKEN_ADMIN_ROLE, msg.sender);
         target = _target;
     }
 
@@ -32,7 +37,12 @@ contract FluiDexDelegate is AccessControl, IFluiDex, ReentrancyGuard {
      * @param tokenAddr the ERC20 token address
      * @return the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr) external override returns (uint16) {
+    function addToken(address tokenAddr) 
+        external 
+        override
+        onlyRole(TOKEN_ADMIN_ROLE)
+        returns (uint16) 
+    {
         return target.addToken(tokenAddr);
     }
 
