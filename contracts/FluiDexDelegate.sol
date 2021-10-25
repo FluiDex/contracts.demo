@@ -5,18 +5,15 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./IFluiDex.sol";
+import "./IFluiDexDelegate.sol";
 
-contract FluiDexDelegate is AccessControl, IFluiDex, ReentrancyGuard {
-
-    bytes32 public constant TOKEN_ADMIN_ROLE = keccak256("TOKEN_ADMIN_ROLE");
+contract FluiDexDelegate is AccessControl, IFluiDexDelegate, ReentrancyGuard {
 
     IFluiDex target;
     event TargetChange(IFluiDex prev, IFluiDex now);
 
     constructor(IFluiDex _target) {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setRoleAdmin(TOKEN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
-        grantRole(TOKEN_ADMIN_ROLE, msg.sender);
         target = _target;
     }
 
@@ -40,17 +37,16 @@ contract FluiDexDelegate is AccessControl, IFluiDex, ReentrancyGuard {
     function addToken(address tokenAddr) 
         external 
         override
-        onlyRole(TOKEN_ADMIN_ROLE)
         returns (uint16) 
     {
-        return target.addToken(tokenAddr);
+        return target.addToken(msg.sender, tokenAddr);
     }
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
      */
     function depositETH(bytes32 to) external payable override {
-        target.depositETH{value: msg.value}(to);
+        target.depositETH{value: msg.value}(msg.sender, to);
     }
 
     /**
@@ -62,7 +58,7 @@ contract FluiDexDelegate is AccessControl, IFluiDex, ReentrancyGuard {
         bytes32 to,
         uint128 amount
     ) external override {
-        target.depositERC20(token, to, amount);
+        target.depositERC20(msg.sender, token, to, amount);
     }
 
     /**

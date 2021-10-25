@@ -4,25 +4,24 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-interface IFluiDex {
+interface IFluiDexDelegate {
     /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
      * @return the new ERC20 token tokenId
      */
-    function addToken(address origin, address tokenAddr) external returns (uint16);
+    function addToken(address tokenAddr) external returns (uint16);
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
      */
-    function depositETH(address origin, bytes32 to) external payable;
+    function depositETH(bytes32 to) external payable;
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
      * @param amount the deposit amount.
      */
     function depositERC20(
-        address origin,
         IERC20 token,
         bytes32 to,
         uint128 amount

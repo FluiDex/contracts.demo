@@ -27,6 +27,7 @@ contract FluiDexDemo is
 
     bytes32 public constant PLUGIN_ADMIN_ROLE = keccak256("PLUGIN_ADMIN_ROLE");
     bytes32 public constant TOKEN_ADMIN_ROLE = keccak256("TOKEN_ADMIN_ROLE");
+    bytes32 public constant DELEGATE_ROLE = keccak256("DELEGATE_ROLE");
 
     enum BlockState {
         Empty,
@@ -67,6 +68,7 @@ contract FluiDexDemo is
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setRoleAdmin(TOKEN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
         _setRoleAdmin(PLUGIN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+        _setRoleAdmin(DELEGATE_ROLE, DEFAULT_ADMIN_ROLE);
         grantRole(TOKEN_ADMIN_ROLE, msg.sender);
         grantRole(PLUGIN_ADMIN_ROLE, msg.sender);
     }
@@ -84,17 +86,29 @@ contract FluiDexDemo is
     }
 
     /**
+     * @notice this is a dev function only for set delegate
+     */
+    function setDelagete(address delegate)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        grantRole(DELEGATE_ROLE, delegate);
+    }
+
+
+    /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
      * @return the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr)
+    function addToken(address origin, address tokenAddr)
         external
         override
         nonReentrant
-        onlyRole(TOKEN_ADMIN_ROLE)
+        onlyRole(DELEGATE_ROLE)
         returns (uint16)
     {
+        require(hasRole(TOKEN_ADMIN_ROLE, origin));
         require(tokenAddrToId[tokenAddr] == 0, "token existed");
         tokenNum++;
         require(tokenNum < TOKEN_NUM_LIMIT, "token num limit reached");
@@ -103,14 +117,20 @@ contract FluiDexDemo is
         tokenIdToAddr[tokenId] = tokenAddr;
         tokenAddrToId[tokenAddr] = tokenId;
 
-        emit NewToken(msg.sender, tokenAddr, tokenId);
+        emit NewToken(origin, tokenAddr, tokenId);
         return tokenId;
     }
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
      */
-    function depositETH(bytes32 to) external payable override orCreateUser(to) {
+    function depositETH(address origin, bytes32 to) 
+        external 
+        payable 
+        override 
+        orCreateUser(origin, to)
+        onlyRole(DELEGATE_ROLE) 
+    {
         emit Deposit(ETH_ID, to, msg.value);
     }
 
@@ -119,14 +139,15 @@ contract FluiDexDemo is
      * @param amount the deposit amount.
      */
     function depositERC20(
+        address origin,
         IERC20 token,
         bytes32 to,
         uint128 amount
-    ) external override nonReentrant tokenExist(token) orCreateUser(to) {
+    ) external override nonReentrant tokenExist(token) orCreateUser(origin, to) {
         uint16 tokenId = tokenAddrToId[address(token)];
 
         uint256 balanceBeforeDeposit = token.balanceOf(address(this));
-        token.safeTransferFrom(msg.sender, address(this), amount);
+        token.safeTransferFrom(origin, address(this), amount);
         uint256 balanceAfterDeposit = token.balanceOf(address(this));
         uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
         emit Deposit(tokenId, to, realAmount);
@@ -222,9 +243,9 @@ contract FluiDexDemo is
      * @dev create a user if not exist
      * @param bjjPubkey the L2 address (bjjPubkey)
      */
-    modifier orCreateUser(bytes32 bjjPubkey) {
+    modifier orCreateUser(address origin, bytes32 bjjPubkey) {
         if (userBjjPubkeyToUserId[bjjPubkey] == 0) {
-            registerUser(msg.sender, bjjPubkey);
+            registerUser(origin, bjjPubkey);
         }
         _;
     }
