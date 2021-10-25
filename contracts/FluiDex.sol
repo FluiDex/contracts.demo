@@ -86,17 +86,6 @@ contract FluiDexDemo is
     }
 
     /**
-     * @notice this is a dev function only for set delegate
-     */
-    function setDelagete(address delegate)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        grantRole(DELEGATE_ROLE, delegate);
-    }
-
-
-    /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
      * @return the new ERC20 token tokenId
