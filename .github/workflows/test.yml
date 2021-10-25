@@ -50,6 +50,12 @@ jobs:
         if: steps.npm_cache.outputs.cache-hit != 'true'
         run: yarn install
 
+      - name: create secrets
+        env:
+          SECRETS_JSON: {{ secrets.SECRETS_JSON }}
+        run: |
+          cat "$SECRETS_JSON" > secrets.json
+
       - name: Verify via smart contract
         run: |
           npx hardhat test
