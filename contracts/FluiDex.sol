@@ -131,18 +131,18 @@ contract FluiDexDemo is Events, KeyedVerifier, ReentrancyGuard {
       // _public_inputs[1] is new_state_root
       require(_public_inputs.length >= 2);
       if (_block_id == 0) {
-         assert(_public_inputs[0] == GENESIS_ROOT);
+         require(_public_inputs[0] == GENESIS_ROOT, "1");
       } else {
-         assert(_public_inputs[0] == state_roots[_block_id-1]);         
+         require(_public_inputs[0] == state_roots[_block_id-1], "2");      
       }
 
       if (_serialized_proof.length != 0) {
          // TODO: hash inputs and then pass into verifier
-         assert(verify_serialized_proof(_public_inputs, _serialized_proof));
+         require(verify_serialized_proof(_public_inputs, _serialized_proof), "3");
          if (_block_id > 0) {
-            assert(block_states[_block_id-1] == BlockState.Verified);
+            require(block_states[_block_id-1] == BlockState.Verified, "4");
          }
-         assert(block_states[_block_id] != BlockState.Verified);
+         require(block_states[_block_id] != BlockState.Verified, "5");
          block_states[_block_id] = BlockState.Verified;
       } else {
          // mark a block as Committed directly, because we may
@@ -150,9 +150,9 @@ contract FluiDexDemo is Events, KeyedVerifier, ReentrancyGuard {
          // note: Committing a block without a rollback/revert mechanism should
          // only happen in demo version!
          if (_block_id > 0) {
-            assert(block_states[_block_id-1] != BlockState.Empty);
+            require(block_states[_block_id-1] != BlockState.Empty, "6");
          }
-         assert(block_states[_block_id] == BlockState.Empty);
+         require(block_states[_block_id] == BlockState.Empty, "7");
          block_states[_block_id] = BlockState.Committed;
       }
       state_roots[_block_id] = _public_inputs[1];
