@@ -20,10 +20,13 @@ async function main() {
   const raw = fs.readFileSync('/tmp/tokens.json', 'utf-8');
   tokens = JSON.parse(raw);
 
+  let deployed: Record<string, string> = {};
+
   const verifierFactory = await ethers.getContractFactory("KeyedVerifier");
   const verifier = await verifierFactory.deploy();
   await verifier.deployed();
   console.log("Verifier deployed to:", verifier.address);
+  deployed['KeyedVerifier'] = verifier.address;
 
   const fluidexFactory = await ethers.getContractFactory("FluiDexDemo");
   const genesisRoot = process.env.GENESIS_ROOT;
@@ -31,6 +34,7 @@ async function main() {
   const fluiDex = await fluidexFactory.deploy(genesisRoot, verifier.address);
   await fluiDex.deployed();
   console.log("FluiDex deployed to:", fluiDex.address);
+  deployed['FluiDexDemo'] = fluiDex.address;
 
   const registerUser = fluiDex.functions.registerUser;
   for(const account of accounts) {
@@ -42,6 +46,8 @@ async function main() {
   const fluiDexDelegate = await fluiDexDelegateFactory.deploy(fluiDex.address);
   await fluiDexDelegate.deployed();
   console.log("FluiDexDelegate deployed to:", fluiDexDelegate.address);
+  deployed['FluiDexDelegate'] = fluiDexDelegate.address;
+  fs.writeFileSync('/tmp/deployed.json', JSON.stringify(deployed));
 
   const DELEGATE_ROLE = await fluiDex.callStatic.DELEGATE_ROLE();
   await fluiDex.functions.grantRole(DELEGATE_ROLE, fluiDexDelegate.address);
