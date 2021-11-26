@@ -66,13 +66,20 @@ contract FluiDexDelegate is AccessControl, IFluiDexDelegate, ReentrancyGuard {
      * @param _block_id the l2 block id
      * @param _public_inputs the public inputs of this block
      * @param _serialized_proof the serialized proof of this block
+     * @param _public_data the serialized tx data inside this block (data availability)
      * @return true if the block was accepted
      */
     function submitBlock(
         uint256 _block_id,
         uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof
+        uint256[] memory _serialized_proof,
+        bytes memory _public_data
     ) external override returns (bool) {
-        return target.submitBlock(_block_id, _public_inputs, _serialized_proof);
+        return target.submitBlock(
+            _block_id,
+            _public_inputs,
+            _serialized_proof,
+            _public_data
+        );
     }
 }
