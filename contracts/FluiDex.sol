@@ -188,32 +188,6 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice to test a block can be submitted or not, this require the block itself
-     *         is valid, and be consistent with state root list
-     * @param _public_inputs the public inputs of this block
-     * @param _serialized_proof the serialized proof of this block
-     * @param _public_data the serialized tx data inside this block (data availability)
-     * @return true if the block can be submitted
-     */
-    function verifySubmitting(
-        uint256 _block_id,
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof,
-        bytes memory _public_data
-    ) public view returns (bool) {
-        // _public_inputs[0] is previous_state_root
-        // _public_inputs[1] is new_state_root
-        require(_public_inputs.length >= 2);
-        if (_block_id == 0) {
-            assert(_public_inputs[0] == GENESIS_ROOT);
-        } else {
-            assert(_public_inputs[0] == state_roots[_block_id - 1]);
-        }
-
-        return verifyBlock(_public_inputs, _serialized_proof, _public_data);
-    }
-
-    /**
      * @notice request to submit a new l2 block, same parameters with verifySubmitting
      * @return true if the block was accepted
      */
@@ -223,31 +197,48 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         uint256[] memory _serialized_proof,
         bytes memory _public_data
     ) external override returns (bool) {
-        require(
-            block_states[_block_id] != BlockState.Verified,
-            "Block must not be submitted twice"
-        );
-        if (_block_id > 0) {
-            require(
-                block_states[_block_id - 1] == BlockState.Verified,
-                "Previous block must be verified"
-            );
+        require(_public_inputs.length >= 2);
+        if (_block_id == 0) {
+            assert(_public_inputs[0] == GENESIS_ROOT);
+        } else {
+            assert(_public_inputs[0] == state_roots[_block_id - 1]);
         }
 
-        bool ret = verifySubmitting(
-            _block_id,
-            _public_inputs,
-            _serialized_proof,
-            _public_data
-        );
+        if (_serialized_proof.length != 0) {
+            bool ret = verifyBlock(
+                _public_inputs,
+                _serialized_proof,
+                _public_data
+            );
 
-        if (!ret) {
-            return ret;
+            if (!ret) {
+                return ret;
+            }
+
+            if (_block_id > 0) {
+                require(
+                    block_states[_block_id - 1] == BlockState.Verified,
+                    "Previous block must be verified"
+                );
+            }
+            require(
+                block_states[_block_id] != BlockState.Verified,
+                "Block must not be submitted twice"
+            );
+            block_states[_block_id] = BlockState.Verified;
+        } else {
+            // mark a block as Committed directly, because we may
+            // temporarily run out of proving resource.
+            // note: Committing a block without a rollback/revert mechanism should
+            // only happen in demo version!
+            if (_block_id > 0) {
+                assert(block_states[_block_id - 1] != BlockState.Empty);
+            }
+            assert(block_states[_block_id] == BlockState.Empty);
+            block_states[_block_id] = BlockState.Committed;
         }
 
         state_roots[_block_id] = _public_inputs[1];
-        block_states[_block_id] = BlockState.Verified;
-
         return true;
     }
 
