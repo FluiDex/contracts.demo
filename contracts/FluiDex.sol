@@ -157,9 +157,9 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
      * @return true if the block was accepted
      */
     function verifyBlock(
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof,
-        bytes memory _public_data
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof,
+        bytes calldata _public_data
     ) public view returns (bool) {
         // _public_inputs[2]/[3] is the low/high 128bit of sha256 hash of _public_data respectively
         require(_public_inputs.length >= 4);
@@ -193,9 +193,9 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
      */
     function submitBlock(
         uint256 _block_id,
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof,
-        bytes memory _public_data
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof,
+        bytes calldata _public_data
     ) external override returns (bool) {
         require(_public_inputs.length >= 2);
         if (_block_id == 0) {
@@ -251,8 +251,8 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
      */
     function submitBlockLegacy(
         uint256 _block_id,
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof
     ) external returns (bool) {
         // _public_inputs[0] is previous_state_root
         // _public_inputs[1] is new_state_root

@@ -49,9 +49,9 @@ interface IFluiDex {
      */
     function submitBlock(
         uint256 _block_id,
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof,
-        bytes memory _public_data
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof,
+        bytes calldata _public_data
     ) external returns (bool);
 
     /**
