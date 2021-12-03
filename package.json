@@ -13,6 +13,7 @@
     "ethers": "^5.0.24",
     "fluidex.js": "git+https://github.com/fluidex/fluidex.js.git#b9224719013c224445fe8ec06f6a05e800b4469e",
     "hardhat": "^2.0.6",
+    "mocha": "^9.1.3",
     "prettier": "^2.2.1",
     "prettier-plugin-solidity": "^1.0.0-beta.2",
     "ts-node": "^10.2.1",
