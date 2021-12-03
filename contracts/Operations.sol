@@ -9,12 +9,11 @@ import "hardhat/console.sol"; //for debugging
 
 /// @title Fluidex operations tools
 library Operations {
-
     /// @notice Config parameters, generated from circuit parameters
     uint8 constant BALANCE_BITS = 3;
     uint8 constant ACCOUNT_BITS = 4;
     uint8 constant ORDER_BITS = 4;
-    uint constant TX_PUBDATA_BYTES = 33;
+    uint256 constant TX_PUBDATA_BYTES = 33;
 
     /// @dev Expected average period of block creation
     uint256 internal constant BLOCK_PERIOD = 15 seconds;
@@ -25,7 +24,8 @@ library Operations {
     uint256 internal constant PRIORITY_EXPIRATION_PERIOD = 7 days;
 
     /// @dev Expiration delta for priority request to be satisfied (in ETH blocks)
-    uint256 internal constant PRIORITY_EXPIRATION = PRIORITY_EXPIRATION_PERIOD / BLOCK_PERIOD;
+    uint256 internal constant PRIORITY_EXPIRATION =
+        PRIORITY_EXPIRATION_PERIOD / BLOCK_PERIOD;
 
     /// @notice Fluidex circuit operation type
     enum OpType {
@@ -33,8 +33,13 @@ library Operations {
         Registry
     }
 
-    function hashPubData(bytes calldata _public_data, uint pos) internal pure returns (bytes20){
-        return Utils.hashBytesToBytes20(_public_data[pos:pos+TX_PUBDATA_BYTES]);
+    function hashPubData(bytes calldata _public_data, uint256 pos)
+        internal
+        pure
+        returns (bytes20)
+    {
+        return
+            Utils.hashBytesToBytes20(_public_data[pos:pos + TX_PUBDATA_BYTES]);
     }
 
     // Registry L2key pubdata
@@ -50,14 +55,22 @@ library Operations {
         uint128 amount;
     }
 
-    function scaleTokenValueToAmount(uint value, uint8 scale) internal pure returns (uint128) {
+    function scaleTokenValueToAmount(uint256 value, uint8 scale)
+        internal
+        pure
+        returns (uint128)
+    {
         require(scale > 0, "Known token must has a scaling");
-        return uint128(value / (10 ** scale));
+        return uint128(value / (10**scale));
     }
 
-    function hashOpDataFromBuf(bytes memory buf) internal pure returns (bytes20){
+    function hashOpDataFromBuf(bytes memory buf)
+        internal
+        pure
+        returns (bytes20)
+    {
         bytes memory truncatedBuf = new bytes(TX_PUBDATA_BYTES);
-        for(uint i = 0; i < TX_PUBDATA_BYTES; i++){
+        for (uint256 i = 0; i < TX_PUBDATA_BYTES; i++) {
             truncatedBuf[i] = buf[i];
         }
 
@@ -65,8 +78,11 @@ library Operations {
     }
 
     /// Serialize registry pubdata
-    function writeRegistryPubdataForPriorityQueue(Registry memory op) internal pure returns (bytes20) {
-
+    function writeRegistryPubdataForPriorityQueue(Registry memory op)
+        internal
+        pure
+        returns (bytes20)
+    {
         uint256 encoded_1 = 0;
         uint8 offset = 0;
         encoded_1 += Bytes.shiftAndReverseBits8(uint8(1), offset); //100 in bits
@@ -89,7 +105,11 @@ library Operations {
     }
 
     /// Serialize deposit pubdata
-    function writeDepositPubdataForPriorityQueue(Deposit memory op) internal pure returns (bytes20) {
+    function writeDepositPubdataForPriorityQueue(Deposit memory op)
+        internal
+        pure
+        returns (bytes20)
+    {
         uint256 encoded_1 = 0;
         uint8 offset = 0;
         encoded_1 += Bytes.shiftAndReverseBits8(uint8(0), offset); //000 in bits

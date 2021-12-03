@@ -45,13 +45,15 @@ interface IFluiDex {
      * @param _public_inputs the public inputs of this block
      * @param _serialized_proof the serialized proof of this block
      * @param _public_data the serialized tx data inside this block (data availability)
+     * @param _priority_op_index the positions of priority op in public data
      * @return true if the block was accepted
      */
     function submitBlock(
         uint256 _block_id,
         uint256[] calldata _public_inputs,
         uint256[] calldata _serialized_proof,
-        bytes calldata _public_data
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
     ) external returns (bool);
 
     /**

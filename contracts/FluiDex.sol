@@ -11,11 +11,18 @@ import "hardhat/console.sol"; // for debugging
 
 import "./IFluiDex.sol";
 import "./IVerifier.sol";
+import "./Storage.sol";
 
 /**
  * @title FluiDexDemo
  */
-contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
+contract FluiDexDemo is
+    AccessControl,
+    IFluiDex,
+    Ownable,
+    ReentrancyGuard,
+    Storage
+{
     using SafeERC20 for IERC20;
 
     bytes32 public constant PLUGIN_ADMIN_ROLE = keccak256("PLUGIN_ADMIN_ROLE");
@@ -37,6 +44,7 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
 
     uint16 public tokenNum;
     mapping(uint16 => address) public tokenIdToAddr;
+    mapping(uint16 => uint8) public tokenScales;
     mapping(address => uint16) public tokenAddrToId;
 
     uint16 public userNum;
@@ -51,6 +59,9 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         _setRoleAdmin(DELEGATE_ROLE, DEFAULT_ADMIN_ROLE);
         grantRole(PLUGIN_ADMIN_ROLE, msg.sender);
         grantRole(DELEGATE_ROLE, msg.sender);
+
+        //TODO: define defaut scale of ETH: eth (10^18 wei) with prec 6 so we get
+        tokenScales[0] = 12;
     }
 
     /**
@@ -85,6 +96,10 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         tokenIdToAddr[tokenId] = tokenAddr;
         tokenAddrToId[tokenAddr] = tokenId;
 
+        //TODO: should provide token's prec and check token's decimal
+        tokenScales[tokenId] = 12;
+
+        emit NewToken(origin, tokenAddr, tokenId);
         return tokenId;
     }
 
@@ -96,12 +111,33 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         payable
         override
         onlyRole(DELEGATE_ROLE)
-    {}
+    {
+        uint16 accountId = userBjjPubkeyToUserId[to];
+        require(accountId != 0, "non-existed user");
+        uint128 amount = Operations.scaleTokenValueToAmount(
+            msg.value,
+            tokenScales[0]
+        );
+
+        Operations.Deposit memory op = Operations.Deposit({
+            accountId: accountId,
+            tokenId: 0,
+            amount: amount
+        });
+
+        addPriorityRequest(
+            Operations.OpType.Deposit,
+            Operations.writeDepositPubdataForPriorityQueue(op)
+        );
+
+        //TODO: correct the value to scaled amount?
+        emit Deposit(ETH_ID, to, msg.value);
+    }
 
     /**
      * @param amount the deposit amount.
      */
-    function depositERC20(IERC20 token, bytes32 to， uint256 amount)
+    function depositERC20(IERC20 token, bytes32 to, uint256 amount)
         external
         override
         nonReentrant
@@ -114,7 +150,27 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         uint256 balanceBeforeDeposit = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), amount);
         uint256 balanceAfterDeposit = token.balanceOf(address(this));
-        realAmount = balanceAfterDeposit - balanceBeforeDeposit;
+        uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
+
+        uint16 accountId = userBjjPubkeyToUserId[to];
+        require(accountId != 0, "non-existed user");
+        uint128 scaledAmount = Operations.scaleTokenValueToAmount(
+            amount,
+            tokenScales[tokenId]
+        );
+
+        Operations.Deposit memory op = Operations.Deposit({
+            accountId: accountId,
+            tokenId: tokenId,
+            amount: scaledAmount
+        });
+
+        addPriorityRequest(
+            Operations.OpType.Deposit,
+            Operations.writeDepositPubdataForPriorityQueue(op)
+        );
+
+        emit Deposit(tokenId, to, realAmount);
     }
 
     /**
@@ -195,13 +251,28 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         uint256 _block_id,
         uint256[] calldata _public_inputs,
         uint256[] calldata _serialized_proof,
-        bytes calldata _public_data
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
     ) external override returns (bool) {
         require(_public_inputs.length >= 2);
         if (_block_id == 0) {
             assert(_public_inputs[0] == GENESIS_ROOT);
         } else {
             assert(_public_inputs[0] == state_roots[_block_id - 1]);
+        }
+
+        //forward priority op
+        if (_priority_op_index.length != 0) {
+            (bool pass, uint64 nextIndex) = verifyPriorityOp(
+                _public_data,
+                _priority_op_index
+            );
+            require(pass, "handling priority ops not correct");
+            assert(
+                totalOpenPriorityRequests >= nextIndex - firstPriorityRequestId
+            );
+            totalOpenPriorityRequests -= nextIndex - firstPriorityRequestId;
+            firstPriorityRequestId = nextIndex;
         }
 
         if (_serialized_proof.length != 0) {

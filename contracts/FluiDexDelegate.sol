@@ -105,14 +105,16 @@ contract FluiDexDelegate is
         uint256 _block_id,
         uint256[] calldata _public_inputs,
         uint256[] calldata _serialized_proof,
-        bytes calldata _public_data
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
     ) external override returns (bool) {
         return
             target.submitBlock(
                 _block_id,
                 _public_inputs,
                 _serialized_proof,
-                _public_data
+                _public_data,
+                _priority_op_index
             );
     }
 
