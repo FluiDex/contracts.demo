@@ -194,6 +194,18 @@ contract FluiDexDemo is
             bjjPubkey: bjjPubkey
         });
         userBjjPubkeyToUserId[bjjPubkey] = userId;
+
+        Operations.Registry memory op = Operations.Registry({
+            accountId: userId,
+            l2key: bjjPubkey
+        });
+
+        addPriorityRequest(
+            Operations.OpType.Registry,
+            Operations.writeRegistryPubdataForPriorityQueue(op)
+        );
+
+        emit RegisterUser(ethAddr, userId, bjjPubkey);
     }
 
     function getBlockStateByBlockId(uint256 _block_id)
