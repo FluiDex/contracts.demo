@@ -5,7 +5,7 @@ import * as hre from "hardhat";
 import { getTestAccount } from "./accounts";
 
 const loadAccounts = () => Array.from(botsIds).map((user_id) => Account.fromMnemonic(getTestAccount(user_id).mnemonic));
-const botsIds = [1, 2, 3, 4, 5];
+const botsIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 const accounts = loadAccounts();
 
 interface Token {
@@ -20,7 +20,7 @@ async function main() {
   const raw = fs.readFileSync('/tmp/tokens.json', 'utf-8');
   tokens = JSON.parse(raw);
 
-  let deployed: Record<string, string> = {};
+  let deployed: Record<string, string | number> = {};
 
   const verifierFactory = await ethers.getContractFactory("KeyedVerifier");
   const verifier = await verifierFactory.deploy();
@@ -37,16 +37,22 @@ async function main() {
   deployed['FluiDexDemo'] = fluiDex.address;
 
   const registerUser = fluiDex.functions.registerUser;
-  for(const account of accounts) {
+  const accountsDump = new Array();
+  for(const [idx, account] of accounts.entries()) {
     await registerUser(account.ethAddr, account.bjjPubKey);
+    accountsDump.push({ id: idx, pubkey: account.bjjPubKey });
     console.log(`register user ${account.bjjPubKey}`);
   }
+  fs.writeFileSync('/tmp/accounts.json', JSON.stringify(accountsDump));
 
   const fluiDexDelegateFactory = await ethers.getContractFactory("FluiDexDelegate");
   const fluiDexDelegate = await fluiDexDelegateFactory.deploy(fluiDex.address);
   await fluiDexDelegate.deployed();
+  await fluiDexDelegate.deployTransaction.wait(1);
   console.log("FluiDexDelegate deployed to:", fluiDexDelegate.address);
   deployed['FluiDexDelegate'] = fluiDexDelegate.address;
+  const tx = await ethers.provider.getTransaction(fluiDexDelegate.deployTransaction.hash);
+  deployed['baseBlock'] = tx.blockNumber!!;
   fs.writeFileSync('/tmp/deployed.json', JSON.stringify(deployed));
 
   const DELEGATE_ROLE = await fluiDex.callStatic.DELEGATE_ROLE();
