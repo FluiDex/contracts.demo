@@ -24,7 +24,7 @@ interface IFluiDexDelegate {
     function depositERC20(
         IERC20 token,
         bytes32 to,
-        uint128 amount
+        uint256 amount
     ) external;
 
     /**

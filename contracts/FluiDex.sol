@@ -9,36 +9,17 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "hardhat/console.sol"; // for debugging
 
-import "./Events.sol";
 import "./IFluiDex.sol";
 import "./IVerifier.sol";
 
 /**
  * @title FluiDexDemo
  */
-contract FluiDexDemo is
-    AccessControl,
-    Events,
-    IFluiDex,
-    Ownable,
-    ReentrancyGuard
-{
+contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant PLUGIN_ADMIN_ROLE = keccak256("PLUGIN_ADMIN_ROLE");
-    bytes32 public constant TOKEN_ADMIN_ROLE = keccak256("TOKEN_ADMIN_ROLE");
     bytes32 public constant DELEGATE_ROLE = keccak256("DELEGATE_ROLE");
-
-    enum BlockState {
-        Empty,
-        Committed,
-        Verified
-    }
-
-    struct UserInfo {
-        address ethAddr;
-        bytes32 bjjPubkey;
-    }
 
     /// hard limit for ERC20 tokens
     uint16 constant TOKEN_NUM_LIMIT = 65535;
@@ -66,10 +47,8 @@ contract FluiDexDemo is
         GENESIS_ROOT = _genesis_root;
         verifier = _verifier;
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setRoleAdmin(TOKEN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
         _setRoleAdmin(PLUGIN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
         _setRoleAdmin(DELEGATE_ROLE, DEFAULT_ADMIN_ROLE);
-        grantRole(TOKEN_ADMIN_ROLE, msg.sender);
         grantRole(PLUGIN_ADMIN_ROLE, msg.sender);
         grantRole(DELEGATE_ROLE, msg.sender);
     }
@@ -91,14 +70,13 @@ contract FluiDexDemo is
      * @param tokenAddr the ERC20 token address
      * @return the new ERC20 token tokenId
      */
-    function addToken(address origin, address tokenAddr)
+    function addToken(address tokenAddr)
         external
         override
         nonReentrant
         onlyRole(DELEGATE_ROLE)
         returns (uint16)
     {
-        require(hasRole(TOKEN_ADMIN_ROLE, origin));
         require(tokenAddrToId[tokenAddr] == 0, "token existed");
         tokenNum++;
         require(tokenNum < TOKEN_NUM_LIMIT, "token num limit reached");
@@ -107,40 +85,36 @@ contract FluiDexDemo is
         tokenIdToAddr[tokenId] = tokenAddr;
         tokenAddrToId[tokenAddr] = tokenId;
 
-        emit NewToken(origin, tokenAddr, tokenId);
         return tokenId;
     }
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
      */
-    function depositETH(address origin, bytes32 to) 
-        external 
-        payable 
-        override 
-        orCreateUser(origin, to)
-        onlyRole(DELEGATE_ROLE) 
-    {
-        emit Deposit(ETH_ID, to, msg.value);
-    }
+    function depositETH(bytes32 to)
+        external
+        payable
+        override
+        onlyRole(DELEGATE_ROLE)
+    {}
 
     /**
-     * @param to the L2 address (bjjPubkey) of the deposit target.
      * @param amount the deposit amount.
      */
-    function depositERC20(
-        address origin,
-        IERC20 token,
-        bytes32 to,
-        uint128 amount
-    ) external override nonReentrant tokenExist(token) orCreateUser(origin, to) {
-        uint16 tokenId = tokenAddrToId[address(token)];
+    function depositERC20(IERC20 token, uint256 amount)
+        external
+        override
+        nonReentrant
+        tokenExist(token)
+        onlyRole(DELEGATE_ROLE)
+        returns (uint16 tokenId, uint256 realAmount)
+    {
+        tokenId = tokenAddrToId[address(token)];
 
         uint256 balanceBeforeDeposit = token.balanceOf(address(this));
-        token.safeTransferFrom(origin, address(this), amount);
+        token.safeTransferFrom(msg.sender, address(this), amount);
         uint256 balanceAfterDeposit = token.balanceOf(address(this));
-        uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
-        emit Deposit(tokenId, to, realAmount);
+        realAmount = balanceAfterDeposit - balanceBeforeDeposit;
     }
 
     /**
@@ -148,23 +122,28 @@ contract FluiDexDemo is
      * @param ethAddr the L1 address
      * @param bjjPubkey the L2 address (bjjPubkey)
      */
-    function registerUser(address ethAddr, bytes32 bjjPubkey) public {
+    function registerUser(address ethAddr, bytes32 bjjPubkey)
+        external
+        override
+        onlyRole(DELEGATE_ROLE)
+        returns (uint16 userId)
+    {
         require(userBjjPubkeyToUserId[bjjPubkey] == 0, "user existed");
         userNum++;
         require(userNum < USER_NUM_LIMIT, "user num limit reached");
 
-        uint16 userId = userNum;
+        userId = userNum;
         userIdToUserInfo[userId] = UserInfo({
             ethAddr: ethAddr,
             bjjPubkey: bjjPubkey
         });
         userBjjPubkeyToUserId[bjjPubkey] = userId;
-        emit RegisterUser(ethAddr, userId, bjjPubkey);
     }
 
     function getBlockStateByBlockId(uint256 _block_id)
-        public
+        external
         view
+        override
         returns (BlockState)
     {
         return block_states[_block_id];
@@ -230,13 +209,54 @@ contract FluiDexDemo is
     }
 
     /**
-     * @dev create a user if not exist
-     * @param bjjPubkey the L2 address (bjjPubkey)
+     * @param tokenId tokenId
+     * @return tokenAddr
      */
-    modifier orCreateUser(address origin, bytes32 bjjPubkey) {
-        if (userBjjPubkeyToUserId[bjjPubkey] == 0) {
-            registerUser(origin, bjjPubkey);
-        }
-        _;
+    function getTokenAddr(uint16 tokenId)
+        external
+        view
+        override
+        returns (address)
+    {
+        return tokenIdToAddr[tokenId];
+    }
+
+    /**
+     * @param tokenAddr tokenAddr
+     * @return tokenId
+     */
+    function getTokenId(address tokenAddr)
+        external
+        view
+        override
+        returns (uint16)
+    {
+        return tokenAddrToId[tokenAddr];
+    }
+
+    /**
+     * @param userId userId
+     * @return UserInfo
+     */
+    function getUserInfo(uint16 userId)
+        external
+        view
+        override
+        returns (UserInfo memory)
+    {
+        return userIdToUserInfo[userId];
+    }
+
+    /**
+     * @param bjjPubkey user's pubkey
+     * @return userId, returns 0 if not exist
+     */
+    function getUserId(bytes32 bjjPubkey)
+        external
+        view
+        override
+        returns (uint16)
+    {
+        return userBjjPubkeyToUserId[bjjPubkey];
     }
 }

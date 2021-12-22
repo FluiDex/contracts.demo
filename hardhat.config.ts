@@ -5,18 +5,17 @@ import "@nomiclabs/hardhat-waffle";
 import { infuraApiKey, walletPrivateKey, etherscanApiKey } from './secrets.json';
 
 const config: HardhatUserConfig = {
-  defaultNetwork: "hardhat",
+  defaultNetwork: "geth",
   networks: {
-    hardhat: {
-      chainId: 1337,
-      mining: {
-        auto: false,
-        interval: [3000, 6000]
-      }
+    geth: {
+      url: "http://localhost:8545",
+      gas: 3000000,
+      gasPrice: 10,
     },
     goerli: {
       url: `https://goerli.infura.io/v3/${infuraApiKey}`,
       accounts: [walletPrivateKey],
+      gas: 30000000,
     }
   },
   etherscan: {

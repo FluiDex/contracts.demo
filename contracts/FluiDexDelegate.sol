@@ -4,16 +4,31 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./Events.sol";
 import "./IFluiDex.sol";
 import "./IFluiDexDelegate.sol";
 
-contract FluiDexDelegate is AccessControl, IFluiDexDelegate, ReentrancyGuard {
+contract FluiDexDelegate is
+    AccessControl,
+    Events,
+    IFluiDexDelegate,
+    ReentrancyGuard
+{
+    using SafeERC20 for IERC20;
+
+    bytes32 public constant TOKEN_ADMIN_ROLE = keccak256("TOKEN_ADMIN_ROLE");
+
+    /// use 0 representing ETH in tokenId
+    uint16 constant ETH_ID = 0;
 
     IFluiDex target;
     event TargetChange(IFluiDex prev, IFluiDex now);
 
     constructor(IFluiDex _target) {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setRoleAdmin(TOKEN_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+        grantRole(TOKEN_ADMIN_ROLE, msg.sender);
         target = _target;
     }
 
@@ -32,21 +47,29 @@ contract FluiDexDelegate is AccessControl, IFluiDexDelegate, ReentrancyGuard {
     /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
-     * @return the new ERC20 token tokenId
+     * @return tokenId the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr) 
-        external 
+    function addToken(address tokenAddr)
+        external
         override
-        returns (uint16) 
+        onlyRole(TOKEN_ADMIN_ROLE)
+        returns (uint16 tokenId)
     {
-        return target.addToken(msg.sender, tokenAddr);
+        tokenId = target.addToken(tokenAddr);
+        emit NewToken(msg.sender, tokenAddr, tokenId);
     }
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
      */
-    function depositETH(bytes32 to) external payable override {
-        target.depositETH{value: msg.value}(msg.sender, to);
+    function depositETH(bytes32 to)
+        external
+        payable
+        override
+        orCreateUser(msg.sender, to)
+    {
+        target.depositETH{value: msg.value}(to);
+        emit Deposit(ETH_ID, to, msg.value);
     }
 
     /**
@@ -56,9 +79,19 @@ contract FluiDexDelegate is AccessControl, IFluiDexDelegate, ReentrancyGuard {
     function depositERC20(
         IERC20 token,
         bytes32 to,
-        uint128 amount
+        uint256 amount
     ) external override {
-        target.depositERC20(msg.sender, token, to, amount);
+        uint256 balanceBeforeDeposit = token.balanceOf(address(this));
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 balanceAfterDeposit = token.balanceOf(address(this));
+        uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
+        token.safeIncreaseAllowance(address(target), realAmount);
+
+        (uint16 tokenId, uint256 finalAmount) = target.depositERC20(
+            token,
+            realAmount
+        );
+        emit Deposit(tokenId, to, finalAmount);
     }
 
     /**
@@ -74,5 +107,17 @@ contract FluiDexDelegate is AccessControl, IFluiDexDelegate, ReentrancyGuard {
         uint256[] memory _serialized_proof
     ) external override returns (bool) {
         return target.submitBlock(_block_id, _public_inputs, _serialized_proof);
+    }
+
+    /**
+     * @dev create a user if not exist
+     * @param bjjPubkey the L2 address (bjjPubkey)
+     */
+    modifier orCreateUser(address origin, bytes32 bjjPubkey) {
+        if (target.getUserId(bjjPubkey) == 0) {
+            uint16 userId = target.registerUser(origin, bjjPubkey);
+            emit RegisterUser(msg.sender, userId, bjjPubkey);
+        }
+        _;
     }
 }
