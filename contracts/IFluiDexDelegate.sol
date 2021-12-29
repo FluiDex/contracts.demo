@@ -8,9 +8,10 @@ interface IFluiDexDelegate {
     /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
+     * @param prec specify the precise inside fluidex
      * @return the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr) external returns (uint16);
+    function addToken(address tokenAddr, uint8 prec) external returns (uint16);
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.

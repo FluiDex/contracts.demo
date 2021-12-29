@@ -47,15 +47,16 @@ contract FluiDexDelegate is
     /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
+     * @param prec specify the precise inside fluidex
      * @return tokenId the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr)
+    function addToken(address tokenAddr, uint8 prec)
         external
         override
         onlyRole(TOKEN_ADMIN_ROLE)
         returns (uint16 tokenId)
     {
-        tokenId = target.addToken(tokenAddr);
+        tokenId = target.addToken(tokenAddr, prec);
         emit NewToken(msg.sender, tokenAddr, tokenId);
     }
 
@@ -68,8 +69,8 @@ contract FluiDexDelegate is
         override
         orCreateUser(msg.sender, to)
     {
-        target.depositETH{value: msg.value}(to);
-        emit Deposit(ETH_ID, to, msg.value);
+        uint128 finalAmount = target.depositETH{value: msg.value}(to);
+        emit Deposit(ETH_ID, to, finalAmount);
     }
 
     /**
@@ -87,8 +88,9 @@ contract FluiDexDelegate is
         uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
         token.safeIncreaseAllowance(address(target), realAmount);
 
-        (uint16 tokenId, uint256 finalAmount) = target.depositERC20(
+        (uint16 tokenId, uint128 finalAmount) = target.depositERC20(
             token,
+            to,
             realAmount
         );
         emit Deposit(tokenId, to, finalAmount);

@@ -14,3 +14,5 @@ ganache/
 
 # secrets
 /secrets.json
+accounts.json
+deployed.json
