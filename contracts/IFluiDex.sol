@@ -27,17 +27,19 @@ interface IFluiDex {
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
      */
-    function depositETH(bytes32 to) 
-        external 
+    function depositETH(bytes32 to)
+        external
         payable
         returns (uint128 realAmount);
 
     /**
      * @param amount the deposit amount.
      */
-    function depositERC20(IERC20 token, bytes32 to, uint256 amount)
-        external
-        returns (uint16 tokenId, uint128 realAmount);
+    function depositERC20(
+        IERC20 token,
+        bytes32 to,
+        uint256 amount
+    ) external returns (uint16 tokenId, uint128 realAmount);
 
     function getBlockStateByBlockId(uint256 _block_id)
         external

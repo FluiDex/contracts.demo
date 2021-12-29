@@ -136,7 +136,11 @@ contract FluiDexDemo is
     /**
      * @param amount the deposit amount.
      */
-    function depositERC20(IERC20 token, bytes32 to, uint256 amount)
+    function depositERC20(
+        IERC20 token,
+        bytes32 to,
+        uint256 amount
+    )
         external
         override
         nonReentrant
