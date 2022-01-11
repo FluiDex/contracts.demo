@@ -61,8 +61,8 @@ contract FluiDexDemo is
         grantRole(PLUGIN_ADMIN_ROLE, msg.sender);
         grantRole(DELEGATE_ROLE, msg.sender);
 
-        //TODO: define defaut scale of ETH: eth (10^18 wei) with prec 6 so we get
-        tokenScales[0] = 12;
+        //TODO: define defaut scale of ETH: eth (10^18 wei) with prec 4 so we get
+        tokenScales[0] = 14;
     }
 
     /**
@@ -150,14 +150,10 @@ contract FluiDexDemo is
     {
         tokenId = tokenAddrToId[address(token)];
 
-        uint256 balanceBeforeDeposit = token.balanceOf(address(this));
-        token.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 balanceAfterDeposit = token.balanceOf(address(this));
-
         uint16 accountId = userBjjPubkeyToUserId[to];
         require(accountId != 0, "non-existed user");
         realAmount = Operations.scaleTokenValueToAmount(
-            balanceAfterDeposit - balanceBeforeDeposit,
+            amount,
             tokenScales[tokenId]
         );
 
@@ -225,15 +221,16 @@ contract FluiDexDemo is
     function verifyBlock(
         uint256[] calldata _public_inputs,
         uint256[] calldata _serialized_proof,
-        bytes calldata _public_data
-    ) public view returns (bool) {
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
+    ) public view returns (uint64) {
         // _public_inputs[2]/[3] is the low/high 128bit of sha256 hash of _public_data respectively
-        require(_public_inputs.length >= 4);
+        require(_public_inputs.length >= 4, "invalid public input fields");
 
         bytes32 h = sha256(_public_data);
 
-        console.logBytes(_public_data);
-        console.logBytes32(h);
+        //console.logBytes(_public_data);
+        //console.logBytes32(h);
 
         uint256 h_lo = 0;
         for (uint256 i = 0; i < 16; i++) {
@@ -246,11 +243,32 @@ contract FluiDexDemo is
             h_hi = h_hi + tmp;
         }
 
-        assert(_public_inputs[2] == h_hi);
-        assert(_public_inputs[3] == h_lo);
+        require(
+            _public_inputs[2] == h_hi && _public_inputs[3] == h_lo,
+            "tx data invalid"
+        );
 
-        return
-            verifier.verify_serialized_proof(_public_inputs, _serialized_proof);
+        uint64 next_priority_op = firstPriorityRequestId;
+        if (_priority_op_index.length != 0) {
+            (bool pass, uint64 nextIndex) = verifyPriorityOp(
+                _public_data,
+                _priority_op_index
+            );
+            console.log(
+                "start from %d, stop in index %d, current %d",
+                firstPriorityRequestId,
+                nextIndex,
+                totalOpenPriorityRequests
+            );
+            require(pass, "handling priority ops incorrect");
+            next_priority_op = nextIndex;
+        }
+
+        require(
+            verifier.verify_serialized_proof(_public_inputs, _serialized_proof),
+            "proof is invalid"
+        );
+        return next_priority_op;
     }
 
     /**
@@ -271,30 +289,20 @@ contract FluiDexDemo is
             assert(_public_inputs[0] == state_roots[_block_id - 1]);
         }
 
-        //forward priority op
-        if (_priority_op_index.length != 0) {
-            (bool pass, uint64 nextIndex) = verifyPriorityOp(
+        if (_serialized_proof.length != 0) {
+            uint64 nextIndex = verifyBlock(
+                _public_inputs,
+                _serialized_proof,
                 _public_data,
                 _priority_op_index
             );
-            require(pass, "handling priority ops not correct");
+
+            //forward priority op
             assert(
                 totalOpenPriorityRequests >= nextIndex - firstPriorityRequestId
             );
             totalOpenPriorityRequests -= nextIndex - firstPriorityRequestId;
             firstPriorityRequestId = nextIndex;
-        }
-
-        if (_serialized_proof.length != 0) {
-            bool ret = verifyBlock(
-                _public_inputs,
-                _serialized_proof,
-                _public_data
-            );
-
-            if (!ret) {
-                return ret;
-            }
 
             if (_block_id > 0) {
                 require(

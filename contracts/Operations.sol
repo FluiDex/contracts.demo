@@ -11,8 +11,8 @@ import "hardhat/console.sol"; //for debugging
 library Operations {
     /// @notice Config parameters, generated from circuit parameters
     uint8 constant BALANCE_BITS = 3;
-    uint8 constant ACCOUNT_BITS = 4;
-    uint8 constant ORDER_BITS = 4;
+    uint8 constant ACCOUNT_BITS = 5;
+    uint8 constant ORDER_BITS = 3;
     uint256 constant TX_PUBDATA_BYTES = 33;
 
     /// @dev Expected average period of block creation
@@ -38,8 +38,12 @@ library Operations {
         pure
         returns (bytes20)
     {
+        uint256 start = pos * TX_PUBDATA_BYTES;
+
         return
-            Utils.hashBytesToBytes20(_public_data[pos:pos + TX_PUBDATA_BYTES]);
+            Utils.hashBytesToBytes20(
+                _public_data[start:start + TX_PUBDATA_BYTES]
+            );
     }
 
     // Registry L2key pubdata
@@ -60,7 +64,8 @@ library Operations {
         pure
         returns (uint128)
     {
-        require(scale > 0, "Known token must has a scaling");
+        //require(scale > 0, "Known token must has a scaling");
+        //notice scale can be zero if the decimal just equal to the prec used inside fluidex
         return uint128(value / (10**scale));
     }
 
