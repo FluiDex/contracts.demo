@@ -61,8 +61,8 @@ contract FluiDexDemo is
         grantRole(PLUGIN_ADMIN_ROLE, msg.sender);
         grantRole(DELEGATE_ROLE, msg.sender);
 
-        //TODO: define defaut scale of ETH: eth (10^18 wei) with prec 4 so we get
-        tokenScales[0] = 14;
+        //TODO: define defaut scale of ETH: eth (10^18 wei) with prec 6 so we get
+        tokenScales[0] = 12;
     }
 
     /**
@@ -96,7 +96,7 @@ contract FluiDexDemo is
 
         uint16 tokenId = tokenNum;
         tokenIdToAddr[tokenId] = tokenAddr;
-        tokenAddrToId[tokenAddr] = prec;
+        tokenAddrToId[tokenAddr] = tokenId;
 
         uint8 tokenDecimal = IERC20Metadata(tokenAddr).decimals();
         require(tokenDecimal >= prec, "prec can not exceed token's decimal");
@@ -254,12 +254,12 @@ contract FluiDexDemo is
                 _public_data,
                 _priority_op_index
             );
-            console.log(
+            /*            console.log(
                 "start from %d, stop in index %d, current %d",
                 firstPriorityRequestId,
                 nextIndex,
                 totalOpenPriorityRequests
-            );
+            );*/
             require(pass, "handling priority ops incorrect");
             next_priority_op = nextIndex;
         }

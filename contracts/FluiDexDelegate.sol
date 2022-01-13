@@ -69,8 +69,8 @@ contract FluiDexDelegate is
         override
         orCreateUser(msg.sender, to)
     {
-        uint128 finalAmount = target.depositETH{value: msg.value}(to);
-        emit Deposit(ETH_ID, to, finalAmount);
+        target.depositETH{value: msg.value}(to);
+        emit Deposit(ETH_ID, to, msg.value);
     }
 
     /**
@@ -81,19 +81,15 @@ contract FluiDexDelegate is
         IERC20 token,
         bytes32 to,
         uint256 amount
-    ) external override {
+    ) external override orCreateUser(msg.sender, to) {
         uint256 balanceBeforeDeposit = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), amount);
         uint256 balanceAfterDeposit = token.balanceOf(address(this));
         uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
         token.safeIncreaseAllowance(address(target), realAmount);
 
-        (uint16 tokenId, uint128 finalAmount) = target.depositERC20(
-            token,
-            to,
-            realAmount
-        );
-        emit Deposit(tokenId, to, finalAmount);
+        (uint16 tokenId, ) = target.depositERC20(token, to, realAmount);
+        emit Deposit(tokenId, to, realAmount);
     }
 
     /**
