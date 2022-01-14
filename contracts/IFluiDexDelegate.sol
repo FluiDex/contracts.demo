@@ -8,9 +8,10 @@ interface IFluiDexDelegate {
     /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
+     * @param prec specify the precise inside fluidex
      * @return the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr) external returns (uint16);
+    function addToken(address tokenAddr, uint8 prec) external returns (uint16);
 
     /**
      * @param to the L2 address (bjjPubkey) of the deposit target.
@@ -32,11 +33,15 @@ interface IFluiDexDelegate {
      * @param _block_id the l2 block id
      * @param _public_inputs the public inputs of this block
      * @param _serialized_proof the serialized proof of this block
+     * @param _public_data the serialized tx data inside this block (data availability)
+     * @param _priority_op_index the positions of priority op in public data
      * @return true if the block was accepted
      */
     function submitBlock(
         uint256 _block_id,
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof,
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
     ) external returns (bool);
 }

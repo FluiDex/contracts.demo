@@ -5,17 +5,25 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "hardhat/console.sol"; // for debugging
 
 import "./IFluiDex.sol";
 import "./IVerifier.sol";
+import "./Storage.sol";
 
 /**
  * @title FluiDexDemo
  */
-contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
+contract FluiDexDemo is
+    AccessControl,
+    IFluiDex,
+    Ownable,
+    ReentrancyGuard,
+    Storage
+{
     using SafeERC20 for IERC20;
 
     bytes32 public constant PLUGIN_ADMIN_ROLE = keccak256("PLUGIN_ADMIN_ROLE");
@@ -37,6 +45,7 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
 
     uint16 public tokenNum;
     mapping(uint16 => address) public tokenIdToAddr;
+    mapping(uint16 => uint8) public tokenScales;
     mapping(address => uint16) public tokenAddrToId;
 
     uint16 public userNum;
@@ -51,6 +60,9 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         _setRoleAdmin(DELEGATE_ROLE, DEFAULT_ADMIN_ROLE);
         grantRole(PLUGIN_ADMIN_ROLE, msg.sender);
         grantRole(DELEGATE_ROLE, msg.sender);
+
+        //TODO: define defaut scale of ETH: eth (10^18 wei) with prec 6 so we get
+        tokenScales[0] = 12;
     }
 
     /**
@@ -68,9 +80,10 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
     /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
+     * @param prec specify the precise inside fluidex
      * @return the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr)
+    function addToken(address tokenAddr, uint8 prec)
         external
         override
         nonReentrant
@@ -85,6 +98,9 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         tokenIdToAddr[tokenId] = tokenAddr;
         tokenAddrToId[tokenAddr] = tokenId;
 
+        uint8 tokenDecimal = IERC20Metadata(tokenAddr).decimals();
+        require(tokenDecimal >= prec, "prec can not exceed token's decimal");
+        tokenScales[tokenId] = tokenDecimal - prec;
         return tokenId;
     }
 
@@ -96,25 +112,61 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
         payable
         override
         onlyRole(DELEGATE_ROLE)
-    {}
+        returns (uint128 realAmount)
+    {
+        uint16 accountId = userBjjPubkeyToUserId[to];
+        require(accountId != 0, "non-existed user");
+        realAmount = Operations.scaleTokenValueToAmount(
+            msg.value,
+            tokenScales[0]
+        );
+
+        Operations.Deposit memory op = Operations.Deposit({
+            accountId: accountId,
+            tokenId: 0,
+            amount: realAmount
+        });
+
+        addPriorityRequest(
+            Operations.OpType.Deposit,
+            Operations.writeDepositPubdataForPriorityQueue(op)
+        );
+    }
 
     /**
      * @param amount the deposit amount.
      */
-    function depositERC20(IERC20 token, uint256 amount)
+    function depositERC20(
+        IERC20 token,
+        bytes32 to,
+        uint256 amount
+    )
         external
         override
         nonReentrant
         tokenExist(token)
         onlyRole(DELEGATE_ROLE)
-        returns (uint16 tokenId, uint256 realAmount)
+        returns (uint16 tokenId, uint128 realAmount)
     {
         tokenId = tokenAddrToId[address(token)];
 
-        uint256 balanceBeforeDeposit = token.balanceOf(address(this));
-        token.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 balanceAfterDeposit = token.balanceOf(address(this));
-        realAmount = balanceAfterDeposit - balanceBeforeDeposit;
+        uint16 accountId = userBjjPubkeyToUserId[to];
+        require(accountId != 0, "non-existed user");
+        realAmount = Operations.scaleTokenValueToAmount(
+            amount,
+            tokenScales[tokenId]
+        );
+
+        Operations.Deposit memory op = Operations.Deposit({
+            accountId: accountId,
+            tokenId: tokenId,
+            amount: realAmount
+        });
+
+        addPriorityRequest(
+            Operations.OpType.Deposit,
+            Operations.writeDepositPubdataForPriorityQueue(op)
+        );
     }
 
     /**
@@ -138,6 +190,16 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
             bjjPubkey: bjjPubkey
         });
         userBjjPubkeyToUserId[bjjPubkey] = userId;
+
+        Operations.Registry memory op = Operations.Registry({
+            accountId: userId,
+            l2key: bjjPubkey
+        });
+
+        addPriorityRequest(
+            Operations.OpType.Registry,
+            Operations.writeRegistryPubdataForPriorityQueue(op)
+        );
     }
 
     function getBlockStateByBlockId(uint256 _block_id)
@@ -150,17 +212,137 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice to verify the validity of a sole block
+     * @param _public_inputs the public inputs of this block
+     * @param _serialized_proof the serialized proof of this block
+     * @param _public_data the serialized tx data inside this block (data availability)
+     * @return true if the block was accepted
+     */
+    function verifyBlock(
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof,
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
+    ) public view returns (uint64) {
+        // _public_inputs[2]/[3] is the low/high 128bit of sha256 hash of _public_data respectively
+        require(_public_inputs.length >= 4, "invalid public input fields");
+
+        bytes32 h = sha256(_public_data);
+
+        //console.logBytes(_public_data);
+        //console.logBytes32(h);
+
+        uint256 h_lo = 0;
+        for (uint256 i = 0; i < 16; i++) {
+            uint256 tmp = uint256(uint8(h[i + 16])) << (120 - 8 * i);
+            h_lo = h_lo + tmp;
+        }
+        uint256 h_hi = 0;
+        for (uint256 i = 0; i < 16; i++) {
+            uint256 tmp = uint256(uint8(h[i])) << (120 - 8 * i);
+            h_hi = h_hi + tmp;
+        }
+
+        require(
+            _public_inputs[2] == h_hi && _public_inputs[3] == h_lo,
+            "tx data invalid"
+        );
+
+        uint64 next_priority_op = firstPriorityRequestId;
+        if (_priority_op_index.length != 0) {
+            (bool pass, uint64 nextIndex) = verifyPriorityOp(
+                _public_data,
+                _priority_op_index
+            );
+            /*            console.log(
+                "start from %d, stop in index %d, current %d",
+                firstPriorityRequestId,
+                nextIndex,
+                totalOpenPriorityRequests
+            );*/
+            require(pass, "handling priority ops incorrect");
+            next_priority_op = nextIndex;
+        }
+
+        require(
+            verifier.verify_serialized_proof(_public_inputs, _serialized_proof),
+            "proof is invalid"
+        );
+        return next_priority_op;
+    }
+
+    /**
+     * @notice request to submit a new l2 block, same parameters with verifySubmitting
+     * @return true if the block was accepted
+     */
+    function submitBlock(
+        uint256 _block_id,
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof,
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
+    ) external override returns (bool) {
+        require(_public_inputs.length >= 2);
+        if (_block_id == 0) {
+            assert(_public_inputs[0] == GENESIS_ROOT);
+        } else {
+            assert(_public_inputs[0] == state_roots[_block_id - 1]);
+        }
+
+        if (_serialized_proof.length != 0) {
+            uint64 nextIndex = verifyBlock(
+                _public_inputs,
+                _serialized_proof,
+                _public_data,
+                _priority_op_index
+            );
+
+            //forward priority op
+            assert(
+                totalOpenPriorityRequests >= nextIndex - firstPriorityRequestId
+            );
+            totalOpenPriorityRequests -= nextIndex - firstPriorityRequestId;
+            firstPriorityRequestId = nextIndex;
+
+            if (_block_id > 0) {
+                require(
+                    block_states[_block_id - 1] == BlockState.Verified,
+                    "Previous block must be verified"
+                );
+            }
+            require(
+                block_states[_block_id] != BlockState.Verified,
+                "Block must not be submitted twice"
+            );
+            block_states[_block_id] = BlockState.Verified;
+        } else {
+            // mark a block as Committed directly, because we may
+            // temporarily run out of proving resource.
+            // note: Committing a block without a rollback/revert mechanism should
+            // only happen in demo version!
+            if (_block_id > 0) {
+                assert(block_states[_block_id - 1] != BlockState.Empty);
+            }
+            assert(block_states[_block_id] == BlockState.Empty);
+            block_states[_block_id] = BlockState.Committed;
+        }
+
+        state_roots[_block_id] = _public_inputs[1];
+        return true;
+    }
+
+    /**
      * @notice request to submit a new l2 block
      * @param _block_id the l2 block id
      * @param _public_inputs the public inputs of this block
      * @param _serialized_proof the serialized proof of this block
      * @return true if the block was accepted
      */
-    function submitBlock(
+    function submitBlockLegacy(
         uint256 _block_id,
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof
-    ) external override returns (bool) {
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof
+    ) external returns (bool) {
         // _public_inputs[0] is previous_state_root
         // _public_inputs[1] is new_state_root
         require(_public_inputs.length >= 2);

@@ -47,15 +47,16 @@ contract FluiDexDelegate is
     /**
      * @notice request to add a new ERC20 token
      * @param tokenAddr the ERC20 token address
+     * @param prec specify the precise inside fluidex
      * @return tokenId the new ERC20 token tokenId
      */
-    function addToken(address tokenAddr)
+    function addToken(address tokenAddr, uint8 prec)
         external
         override
         onlyRole(TOKEN_ADMIN_ROLE)
         returns (uint16 tokenId)
     {
-        tokenId = target.addToken(tokenAddr);
+        tokenId = target.addToken(tokenAddr, prec);
         emit NewToken(msg.sender, tokenAddr, tokenId);
     }
 
@@ -80,18 +81,15 @@ contract FluiDexDelegate is
         IERC20 token,
         bytes32 to,
         uint256 amount
-    ) external override {
+    ) external override orCreateUser(msg.sender, to) {
         uint256 balanceBeforeDeposit = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), amount);
         uint256 balanceAfterDeposit = token.balanceOf(address(this));
         uint256 realAmount = balanceAfterDeposit - balanceBeforeDeposit;
         token.safeIncreaseAllowance(address(target), realAmount);
 
-        (uint16 tokenId, uint256 finalAmount) = target.depositERC20(
-            token,
-            realAmount
-        );
-        emit Deposit(tokenId, to, finalAmount);
+        (uint16 tokenId, ) = target.depositERC20(token, to, realAmount);
+        emit Deposit(tokenId, to, realAmount);
     }
 
     /**
@@ -103,10 +101,19 @@ contract FluiDexDelegate is
      */
     function submitBlock(
         uint256 _block_id,
-        uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof
+        uint256[] calldata _public_inputs,
+        uint256[] calldata _serialized_proof,
+        bytes calldata _public_data,
+        bytes calldata _priority_op_index
     ) external override returns (bool) {
-        return target.submitBlock(_block_id, _public_inputs, _serialized_proof);
+        return
+            target.submitBlock(
+                _block_id,
+                _public_inputs,
+                _serialized_proof,
+                _public_data,
+                _priority_op_index
+            );
     }
 
     /**

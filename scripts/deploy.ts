@@ -7,6 +7,7 @@ import { getTestAccount } from "./accounts";
 const loadAccounts = () => Array.from(botsIds).map((user_id) => Account.fromMnemonic(getTestAccount(user_id).mnemonic));
 const botsIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 const accounts = loadAccounts();
+const outputPath = process.env.DEPLOY_DIR || '/tmp/'
 
 interface Token {
   symbol: string,
@@ -17,7 +18,7 @@ async function main() {
   await run('compile');
 
   let tokens: Token[];
-  const raw = fs.readFileSync('/tmp/tokens.json', 'utf-8');
+  const raw = fs.readFileSync(`${outputPath}tokens.json`, 'utf-8');
   tokens = JSON.parse(raw);
 
   let deployed: Record<string, string | number> = {};
@@ -36,14 +37,15 @@ async function main() {
   console.log("FluiDex deployed to:", fluiDex.address);
   deployed['FluiDexDemo'] = fluiDex.address;
 
-  const registerUser = fluiDex.functions.registerUser;
+  // const registerUser = fluiDex.functions.registerUser;
   const accountsDump = new Array();
   for(const [idx, account] of accounts.entries()) {
-    await registerUser(account.ethAddr, account.bjjPubKey);
-    accountsDump.push({ id: idx, pubkey: account.bjjPubKey });
+    // await registerUser(account.ethAddr, account.bjjPubKey);
+    // for provided to the "offline" mode of ethlistener, id should start from 1
+    accountsDump.push({ id: idx + 1, pubkey: account.bjjPubKey });
     console.log(`register user ${account.bjjPubKey}`);
   }
-  fs.writeFileSync('/tmp/accounts.json', JSON.stringify(accountsDump));
+  fs.writeFileSync(`${outputPath}accounts.json`, JSON.stringify(accountsDump));
 
   const fluiDexDelegateFactory = await ethers.getContractFactory("FluiDexDelegate");
   const fluiDexDelegate = await fluiDexDelegateFactory.deploy(fluiDex.address);
@@ -53,7 +55,7 @@ async function main() {
   deployed['FluiDexDelegate'] = fluiDexDelegate.address;
   const tx = await ethers.provider.getTransaction(fluiDexDelegate.deployTransaction.hash);
   deployed['baseBlock'] = tx.blockNumber!!;
-  fs.writeFileSync('/tmp/deployed.json', JSON.stringify(deployed));
+  fs.writeFileSync(`${outputPath}deployed.json`, JSON.stringify(deployed));
 
   const DELEGATE_ROLE = await fluiDex.callStatic.DELEGATE_ROLE();
   await fluiDex.functions.grantRole(DELEGATE_ROLE, fluiDexDelegate.address);
@@ -61,12 +63,14 @@ async function main() {
 
   const addToken = fluiDexDelegate.functions.addToken;
   for (const {symbol, address} of Array.from(tokens)) {
-    await addToken(address);
-    console.log(`add ${symbol} token at`, address);
+    //the prec is consistend with pre-defined assets
+    let prec = 6;
+    await addToken(address, 6);
+    console.log(`add ${symbol} token (prec ${prec}) at`, address);
   }
 
   // skip verify on localhost
-  if (hre.network.name !== "geth") {
+  if (hre.network.name == "goerli") {
     try {
       await run('verify', {
         address: verifier.address,
