@@ -154,12 +154,14 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
      * @param _block_id the l2 block id
      * @param _public_inputs the public inputs of this block
      * @param _serialized_proof the serialized proof of this block
+     * @param _public_data the serialized tx data inside this block (data availability)
      * @return true if the block was accepted
      */
     function submitBlock(
         uint256 _block_id,
         uint256[] memory _public_inputs,
-        uint256[] memory _serialized_proof
+        uint256[] memory _serialized_proof,
+        bytes memory _public_data
     ) external override returns (bool) {
         // _public_inputs[0] is previous_state_root
         // _public_inputs[1] is new_state_root
@@ -172,6 +174,12 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
 
         if (_serialized_proof.length != 0) {
             // TODO: hash inputs and then pass into verifier
+            assert(
+                verifyDA(
+                    _public_inputs,
+                    _public_data
+                )
+            );
             assert(
                 verifier.verify_serialized_proof(
                     _public_inputs,
@@ -195,6 +203,35 @@ contract FluiDexDemo is AccessControl, IFluiDex, Ownable, ReentrancyGuard {
             block_states[_block_id] = BlockState.Committed;
         }
         state_roots[_block_id] = _public_inputs[1];
+
+        return true;
+    }
+
+    function verifyDA(
+        uint256[] memory _public_inputs,
+        bytes memory _public_data
+    ) private view returns (bool) {
+        // _public_inputs[2]/[3] is the low/high 128bit of sha256 hash of _public_data respectively
+        require(_public_inputs.length >= 4);
+
+        bytes32 h = sha256(_public_data);
+
+        // console.logBytes(_public_data);
+        // console.logBytes32(h);
+
+        uint256 h_lo = 0;
+        for (uint256 i = 0; i < 16; i++) {
+            uint256 tmp = uint256(uint8(h[i + 16])) << (120 - 8 * i);
+            h_lo = h_lo + tmp;
+        }
+        uint256 h_hi = 0;
+        for (uint256 i = 0; i < 16; i++) {
+            uint256 tmp = uint256(uint8(h[i])) << (120 - 8 * i);
+            h_hi = h_hi + tmp;
+        }
+
+        assert(_public_inputs[2] == h_hi);
+        assert(_public_inputs[3] == h_lo);
 
         return true;
     }
